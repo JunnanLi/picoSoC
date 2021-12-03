@@ -38,7 +38,7 @@ picoSoC整体架构如下图所示，处理器采用简化版的[picorv32i](http
 ### 硬件模块连接关系
 模块间的连接关系如下图所示。picoSoC硬件部分（UM.v）可以分成上下两层，上层为um_for_cpu，实现CPU相关功能，包括配置指令和数据、指令与数据存储单元、CPU核运行单元；下层报文收发，包含rgmii异步时钟域收发、rgmii<->gmii转换、CRC校验／计算、拼接／拆分数据模块。另外，基于RAM实现的指令／数据存储器其具有两个访问端口，一个供CPU使用，另一个用于配置。
 
-<img src=https://github.com/JunnanLi/picoSoC/blob/main/docs/picoSoC_arc.jpg width="600">
+<img src=https://github.com/JunnanLi/picoSoC/blob/main/docs/picoSoC_arc_new.jpg width="600">
 
 ## picoSoC软件部分
 picoSoC软件部分请参考[iCore中的相关设计](https://github.com/JunnanLi/iCore)。
