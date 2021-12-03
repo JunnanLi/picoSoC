@@ -1,126 +1,77 @@
-# picoSoC
-SoC of PicoRV32i
+# picoSoC项目
+picoSoC整体架构如下图所示，处理器采用简化版的[picorv32i](https://github.com/YosysHQ/picorv32)（已裁减压缩指令处理逻辑）。同时，picoSoC并集成有一个以太网端口，用于配置指令与数据，以及显示打印信息。
 
-# iCore项目
-iCore可用于in-line FPGA-CPU协同分组处理。iCore整体架构如下图所示，其中CPU采用10级流水的RISCV核，即[TuMan32](https://github.com/JunnanLi/TuMan)，通过访存适配接口，即Memory Access for CPU，可以直接访问基于RAM实现的报文缓存区，从而实现报文的读取与修改。另外，分组处理流水线（pipeline）同样可以通过访存适配接口，即Memory Access for pipeline访问相同的报文缓存区。因此，iCore可以避免上送CPU的报文从流水线拷贝到CPU，以及从CPU拷贝回流水线的多次报文复制。iCore的流水线与CPU交互过程无需报文拷贝（零拷贝），从而降低处理延时，并能通过修改RAM位宽来自定义CPU与FPGA交互的带宽。
-
-<img src=https://github.com/JunnanLi/iCore/blob/master/docs/img/iCore%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84.PNG width="600">
-
-此外，我们还设计了单独的RAM，即图中的RAM5，方便CPU主动发送报文，可用于实现TCP/IP协议栈等功能。
+<img src="https://github.com/JunnanLi/picoSoC/blob/main/docs/picoSoC.jpg" width="500">
 
 ## 目录
-  * [icore简介](#iCore项目)
-  * [icore硬件部分](#icore硬件部分)
+  * [picoSoC简介](#picoSoC项目)
+  * [picoSoC硬件部分](#picoSoC硬件部分)
      * [硬件模块组成](#硬件模块组成)
      * [硬件模块连接关系](#硬件模块连接关系)
-  * [icore软件部分](#icore软件部分)
-  * [Vivado仿真](#Vivado仿真)
-     * [流程](#流程)
-     * [仿真结果](#仿真结果)
+  * [picoSoC软件部分](#picoSoC软件部分)
   * [FPGA验证](#FPGA验证)
      * [生成CPU可运行的二进制文件](#生成CPU可运行的二进制文件)
      * [生成FPGA可运行的比特流文件](#生成FPGA可运行的比特流文件)
      * [与CPU交互](#与CPU交互)
      * [验证结果](#验证结果)
-  * [更多](#更多)
-     * [资源开销](#资源开销)
-     * [简化版TCP-IP协议栈测试](#简化版TCP-IP协议栈测试)
-     * [相关文档]# 相关文档
+ 
 
-## icore硬件部分
+## picoSoC硬件部分
 ### 硬件模块组成
-硬件文件夹包含11个文件，功能如下表所示
+硬件文件夹包含12个文件，功能如下表所示
 
 | 文件名                 | 包含的模块    | 功能描述 |
 |:---------------------:|:-----------:|---------|
-| TuMan_core.v          |  TuMan_core | 10级流水RISCV核（[TuMan](https://github.com/JunnanLi/TuMan)） |
-| TuMan_top.v           |  TuMan_top  |CPU核顶层文件，连接CPU核和存储器 |
-| memory.v              |  mem_instr<br>mem_data  |指令存储器（即ITCM）<br>数据存储器（即DTCM） |
-| conf_mem.v            |  conf_mem   |配置模块，通过报文配置ITCM和DTCM，其中以太网协议字段为0x9001-0x9004，以及输出程序中的"printf"内容，以太网协议字段为0x9005 |
-| um_for_cpu.v          |  um_for_cpu |项目为CPU建立的顶层文件，包含CPU核顶层和配置CPU的模块，即TuMan_top.v和conf_mem.v |
-| parser_pkt.v          |  parser     |报文解析，解析TCP报文并送给报文处理模块，即manage_pkt.v |
-| manage_pkt.v          |  manager    |文处理，将报文缓存进RAM，待CPU处理完报文后，从RAM读取报文，并输出 |
-| um_for_pktPipeline.v  |  um_for_pktPipeline|项目为pipeline建立的顶层文件，包含解析和报文处理模块，即parser_pkt.v和manage_pkt.v |
-| um.v                  |  um         |项目的顶层模块，接口定义参见[FAST开源项目](http://www.fastswitch.org/), 负责从网口接收报文，以及向网口发送报文 |
-| gen_data_fixed_instr.v|  gen_data   |指令静态存储, 根据FAST报文格式生成以太网报文，用于配置存储器，即ITCM and DTCM。供仿真使用 |
-| testbench_for_iCore.v |  test_for_icore|项目的测试激励，供仿真使用 |
+| picorv32_simplified.v |  picorv32i_core | 32位整数处理器（[picorv32i](https://github.com/YosysHQ/picorv32)） |
+| Pico_top.v            |  pico_top   |CPU核顶层文件，连接CPU核和存储器 |
+| memory.v              |  memory     |指令／数据存储器 |
+| conf_mem.v            |  conf_mem   |配置模块，通过报文配置存储器，其中以太网协议字段为0x9001-0x9004，以及输出程序中的"printf"内容，以太网协议字段为0x9005 |
+| um_for_cpu.v          |  um_for_cpu |项目为CPU建立的顶层文件，包含CPU核顶层和配置CPU的模块，即Pico_top.v和conf_mem.v |
+| picoSoC_top.v         |  picoSoC_top|项目顶层模块，连接gmii输入／输出，UM模块 |
+| asyn_recv_packet.v    |  asyn_recv_packet |rgmii收发（异步时钟域） |
+| gmii_crc_check.v      |  gmii_crc_check|crc校验，并去除crc字段 |
+| gmii_crc_cal.v        |  gmii_crc_cal|计算并添加crc字段 |
+| gmii_to_134b_pkt.v    |  gmii_to_134b_pkt         |由8b数据组装成134b数据，高2b表示头尾（其中2'b01表示头，2'b10表示尾），中间4b表示16B数据有效数量，例如16B都有效则为4'hf，最后128b为数据 |
+| pkt_134b_to_gmii.v   |  pkt_134b_to_gmii   |由134b数据拆分成16个8b数据 |
+| util_gmii_to_rgmii.v |  util_gmii_to_rgmii|rgmii<->gmii转换 |
 
 ### 硬件模块连接关系
-模块间的连接关系如下图所示。iCore硬件部分（UM.v）可以分成上下两层，上层为um_for_cpu，实现CPU相关功能，包括配置指令和数据、指令与数据存储单元、CPU核运行单元；下层um_for_pipeline，实现硬件流水线功能，包含报文解析、报文处理模块。另外，基于RAM实现的报文缓存单元放在流水线的报文处理模块当中（manage_pkt.v），其具有两个访问端口，一个供CPU使用，另一个分时供流水线输入、输出使用。为避免流水线输入、输出抢占RAM访问接口，iCore还设计了多个独立的RAM，通过分时复用RAM读写端口，可以获得线速访存性能。
+模块间的连接关系如下图所示。picoSoC硬件部分（UM.v）可以分成上下两层，上层为um_for_cpu，实现CPU相关功能，包括配置指令和数据、指令与数据存储单元、CPU核运行单元；下层报文收发，包含rgmii异步时钟域收发、rgmii<->gmii转换、CRC校验／计算、拼接／拆分数据模块。另外，基于RAM实现的指令／数据存储器其具有两个访问端口，一个供CPU使用，另一个用于配置。
 
-<img src=https://github.com/JunnanLi/iCore/blob/master/docs/img/%E6%A8%A1%E5%9D%97%E8%BF%9E%E6%8E%A5%E5%85%B3%E7%B3%BB.PNG width="600">
+<img src=https://github.com/JunnanLi/picoSoC/blob/main/docs/picoSoC_arc.jpg width="600">
 
-## icore软件部分
-软件部分需要实现两部分功能，分别是编译C程序生成CPU可以运行的二进制文件，以及实现外部主机和CPU交互的功能。为此，iCore软件的两个功能在项目中对应两个文件夹，即firmware和controller。具体功能如下表所述：
-
-| 文件夹名     | 功能描述 |
-|:-----------:|----------------------|
-| firmware    | 负责编译C代码生成二进制文件firmware.hex|
-| controller  | 负责将二进制文件写入CPU的存储器中，同时实现打印CPU运行过称中的打印信息 |
-
-软件部分在终端主机上运行，与FPGA的交互通过以太网报文实现（实现机制参考[FAST项目](https://github.com/Winters123/paper-base/blob/master/FAST-final.pdf)）。iCore软件部分与FPGA的交互过程如下图所示。
-
-<img src=https://github.com/JunnanLi/iCore/blob/master/docs/img/%E5%A4%84%E7%90%86%E6%B5%81%E7%A8%8B.PNG width="700">
-
-
-## Vivado仿真
-### 流程
-1) 根据firmware文件夹的[README](https://github.com/JunnanLi/iCore/blob/master/software/Firmware/README.md)编译C程序，以生成firmware.hex二进制文件。当然我们也提供预先编译好的[firmware.hex]；(https://github.com/JunnanLi/iCore/blob/master/mcs%26hex/firmware.hex)，实现了端口环路的功能，即报文1扣进，1口出；
-2) 打开vivado，加载[hardware](https://github.com/JunnanLi/iCore/tree/master/hardware)文件夹中的所有.v/.sv文件(gen_data_instr.sv除外)，并将test_for_icore设置为顶层文件；
-3) 读取firmware.hex的指令，并更新[gen_data_fixed_instr.sv](https://github.com/JunnanLi/iCore/blob/master/hardware/gen_data_fixed_instr.sv)中的memory寄存器（27行）。目前我们实现的方式是运行[write_instr.py](https://github.com/JunnanLi/iCore/blob/master/hardware/write_instr.py)，需要保证firmware.hex，[gen_data_instr.sv](https://github.com/JunnanLi/iCore/blob/master/hardware/gen_data_instr.sv)在相同目录。当然我们也提供预先编译好的[gen_data_fixed_instr.sv](https://github.com/JunnanLi/iCore/blob/master/hardware/gen_data_fixed_instr.sv)；
-4） 运行程序
-
-### 仿真结果
-加载um模块的pktout_data_wr和pktout_data两组接口信号，我们可以发现，在运行12.86us之后会输出5个TCP报文。
-
+## picoSoC软件部分
+picoSoC软件部分请参考[iCore中的相关设计](https://github.com/JunnanLi/iCore)。
 
 ## FPGA验证
-我们目前仅支持在[OpenBox-S4](https://github.com/fast-codesign/FAST-OpenBox_S4-impl)上验证iCore项目。我们提供预先编译好的[二进制文件](https://github.com/JunnanLi/iCore/tree/master/mcs%26hex)，可以直接用于FPGA验证。
+本项目已在Xilinx FPGA(zynq7020)上验证。
 
 ### 生成CPU可运行的二进制文件
-我们使用firmware文件夹中的[README](https://github.com/JunnanLi/iCore/blob/master/software/Firmware/README.md)生成firmware.hex二进制文件。
+请参考[iCore中的相关操作](https://github.com/JunnanLi/iCore)。
 
 ### 生成FPGA可运行的比特流文件
-1) 首先，我们需要一个OpenBox-S4平台相关代码，点击[这里](https://github.com/fast-codesign/FAST-OpenBox_S4-impl)获取，并使用该项目中的`um.v`替换原来的`um.v`；
-2) 接着，我们使用Vivado 2018.2打开Openbox工程，并加载其他的八个硬件模块文件，即`TuMan_core.v`, `TuMan_top.v`, `conf_mem.v`, `memory.v`, `um_for_cpu.v`, `um_for_pipeline.v`, `parser_pkt.v`, `manage_pkt.v`;
-3) 第三，我们为该项目生成五个IP核，分别是fifo_134_256（同步fifo），fifo_8_64（同步fifo），fifo_96_64（同步fifo），ram_32_512（双端口RAM），ram_32_16384（双端口RAM）；
-4）运行`Generate Bitstream`，生成FPGA可运行的比特流文件，即OpenBox_S4.bit；
+1) 首先，我们使用Vivado创建新工程，并加载其他的12个硬件模块文件，即`picorv32_simplified.v`，`Pico_top.v`，`memory.v`，`conf_mem.v`，`um_for_cpu.v`，`picoSoC_top.v`，`asyn_recv_packet.v`，`gmii_crc_check.v`，`gmii_crc_cal.v`，`gmii_to_134b_pkt.v`，`pkt_134b_to_gmii.v`，`util_gmii_to_rgmii.v`；
+2) 其次，我们为该项目生成6个IP核，分别是clk_wiz_0（输入50MHz，输出125MHz），asfifo_8_1024（异步fifo），fifo_8b_512（同步fifo），fifo_64b_512（同步fifo），fifo_134b_512（同步fifo），ram_8_16384（双端口RAM）；
+3) 第三，参考引脚约束文件[picoSoC.xdc](https://github.com/JunnanLi/iCore/blob/master/mcs%26hex/firmware.hex)分配引脚；
+4）最后，运行`Generate Bitstream`，生成FPGA可运行的比特流文件，即picoSoC.bit；
 
 ### 与CPU交互
-我们根据controller文件夹中[README](https://github.com/JunnanLi/iCore/blob/master/software/Controller/README.md)实现与CPU的交互。
+请参考iCore中software/controller文件夹中[README](https://github.com/JunnanLi/iCore/blob/master/software/Controller/README.md)实现与CPU的交互。
 
 ### 验证结果
 1) 首先，代开`Hardware Manager`，并将比特流文件烧入FPGA中；
-2) 使用根据controller文件夹中[README](https://github.com/JunnanLi/iCore/blob/master/software/Controller/README.md)配置CPU指令、数据内容，并开启运行；
-3) 打开wiresharek，使用发包工具发送任意的TCP报文，可以抓到FPGA返回的相同TCP报文。
+2) 使用根据iCore项目中software/controller文件夹中[README](https://github.com/JunnanLi/iCore/blob/master/software/Controller/README.md)配置CPU指令、数据内容，并开启运行.
 
 ## 更多
 
 ### 资源开销
 | Module             | Slice LUTs | Slice Registers | Block Memory Tile |
 |:------------------ | ----------:| ---------------:| -----------------:|
-| parser_pkt         |         52 |             540 |                 0 |
-| manage_pkt         |        322 |             501 |                 7 |
-| conf_mem           |        283 |             500 |                 2 |
-| memory             |        162 |              49 |              30.5 |
-| TuMan_core         |       6294 |            3086 |                 0 |
+| conf_mem           |        258 |             149 |               1.5 |
+| memory             |        128 |              47 |                16 |
+| picorv32           |       1284 |             393 |                 0 |
 
 
-### 简化版TCP-IP协议栈测试
-1) ICMP测试
-我们将iCore的IP地址设置为202.197.15.129，然后笔记本端输入`ping 202.197.15.129`命令
-<img src=https://github.com/JunnanLi/iCore/blob/master/docs/img/ping.png width="400">
-
-2) UDP测试
-我们将iCore的IP地址设置为202.197.15.129，并作为UDP客户端，然后笔记本作为UDP服务端，实现UDP交互
-<img src=https://github.com/JunnanLi/iCore/blob/master/docs/img/udp.png width="400">
-
-3) TCP测试
-我们将iCore的IP地址设置为202.197.15.129，并作为TCP客户端，然后笔记本作为TCP服务端，实现TCP交互
-<img src=https://github.com/JunnanLi/iCore/blob/master/docs/img/tcp.png width="400">
-
-### 相关文档
-iCore简介文档请从[这里](https://github.com/JunnanLi/iCore/blob/master/docs/TuMan-A%20RV32I%20Core.pdf)获得
 
 
 
