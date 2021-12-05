@@ -1,15 +1,15 @@
 /*
- *  picoSoC_hardware -- SoC Hardware for RISCV-32I core.
+ *  iCore_hardware -- Hardware for TuMan RISC-V (RV32I) Processor Core.
  *
  *  Copyright (C) 2019-2020 Junnan Li <lijunnan@nudt.edu.cn>.
  *  Copyright and related rights are licensed under the MIT license.
  *
- *  Data: 2021.12.03
- *  Description: This module is the top module of pico.
+ *  Data: 2020.01.01
+ *  Description: This module is the top module.
  */
  `timescale 1 ns / 1 ps
 
-module Pico_top(
+module pico_top(
   input                 clk,
   input                 resetn,
   // interface for configuring memory
