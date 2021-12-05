@@ -52,7 +52,7 @@ picoSoC软件部分请参考[iCore中的相关设计](https://github.com/JunnanL
 ### 生成FPGA可运行的比特流文件
 1) 首先，我们使用Vivado创建新工程，并加载其他的12个硬件模块文件，即`picorv32_simplified.v`，`Pico_top.v`，`memory.v`，`conf_mem.v`，`um_for_cpu.v`，`picoSoC_top.v`，`asyn_recv_packet.v`，`gmii_crc_check.v`，`gmii_crc_cal.v`，`gmii_to_134b_pkt.v`，`pkt_134b_to_gmii.v`，`util_gmii_to_rgmii.v`；
 2) 其次，我们为该项目生成6个IP核，分别是clk_wiz_0（输入50MHz，输出125MHz），asfifo_8_1024（异步fifo），fifo_8b_512（同步fifo），fifo_64b_512（同步fifo），fifo_134b_512（同步fifo），ram_8_16384（双端口RAM）；
-3) 第三，参考引脚约束文件[picoSoC.xdc](https://github.com/JunnanLi/iCore/blob/master/mcs%26hex/firmware.hex)分配引脚；
+3) 第三，参考引脚约束文件[picoSoC.xdc](https://github.com/JunnanLi/picoSoC/tree/main/hardware/constrain/picoSoC.xdc)分配引脚；
 4）最后，运行`Generate Bitstream`，生成FPGA可运行的比特流文件，即picoSoC.bit；
 
 ### 与CPU交互
